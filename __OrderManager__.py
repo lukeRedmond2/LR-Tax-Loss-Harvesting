@@ -1,21 +1,21 @@
 # Importing necessary libraries
-from __DataLoader__ import DataLoader
 from datetime import datetime
 import pandas as pd
 
 # Order manager class
-class OrderManger():
+class OrderManager():
     
 	# Initialiser
-    def __init__(self):
-        pass
+    def __init__(self, loader):
+        
+		# Setting the dataloader
+        self.loader = loader
     
 	# Method to create an order
     def MakeOrder(self, symbol, quantity, side):
         
 		# Creating a data loader and extracting the live price
-        dataloader = DataLoader()
-        price = dataloader.Live(symbol, "price")
+        price = self.loader.Live(symbol, "price")
         
 		# Getting today's date and time
         date = datetime.today()

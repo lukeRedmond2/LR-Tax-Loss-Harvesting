@@ -1,42 +1,48 @@
 # Importing necessary libraries
-from __DataLoader__ import DataLoader
-from __Screener__ import Screener
 from __Allocator__ import Allocator
-from __OrderManager__ import OrderManger
-from __Rebalancer__ import Rebalance
-from datetime import datetime
+from __Screener__ import Screener
+from __DataLoader__ import DataLoader
+from __Calculator__ import Calculator
+from __Checker__ import Checker
+from __Taxer__ import Taxer
+from __OrderManager__ import OrderManager
+from __Rebalancer__ import Rebalancer
+from __TaxLossHarvester__ import TaxLossHarvester
+from datetime import datetime, timedelta
 import pandas as pd
+import numpy as np
 
 # Portfolio class
 class Portfolio():
     
-	# Initialiser
+	# Initialiser, adds stocks
     def __init__(self, universe, capital, size):
         
 		# Setting portfolio attributes
+        self.carry = 0
         self.size = size
         self.capital = capital
+        self.starting_capital = capital
         self.universe = universe.copy()
         self.available_universe = universe.copy()
         
 		# Setting manager dataframes for tracking trades and assets
-        self.trades = pd.DataFrame({"Date":["filler", datetime(2021,1,1), datetime(2022,3,4), datetime(2023,1,1), datetime(2023,2,2)],
-                                    "Symbol":["filler", "SOFI", "SOFI", "AAPL", "AAPL"],
-                                    "Price":["filler", 200, 250, 200, 240],
-                                    "Quantity":["filler", 10, 10, 10, 10],
-                                    "Action":["filler", "buy", "sell", "buy", "sell"]})
-        self.assets = pd.DataFrame({"Symbol":["filler"], "Quantity":["filler"], "LT Gains":["filler"], "ST Gains":["filler"]})
-        self.manager = OrderManger()
+        self.trades = pd.DataFrame({"Date":["filler"], "Symbol":["filler"], "Price":["filler"], "Quantity":["filler"], "Action":["filler"]})
+        self.assets = pd.DataFrame({"Symbol":["filler"], "Quantity":["filler"]})
 
-		# Objects for choosing the top stocks of our universe
-        loader = DataLoader()
-        screener = Screener()
-        allocator = Allocator()
-        
-		# Calculating quantities for what stocks
-        stocks = loader.Past(self.universe)
-        screened = screener.Screen(stocks, self.size)
-        allocated = allocator.Allocate(screened, self.capital, loader)
+		# Setting the tools of the portfolio
+        self.taxer = Taxer()
+        self.checker = Checker()
+        self.calculator = Calculator()
+        self.loader = DataLoader()
+        self.screener = Screener()
+        self.allocator = Allocator()
+        self.manager = OrderManager(self.loader)
+        self.engine = TaxLossHarvester(self.checker, self.calculator, self.taxer, self.loader)
+        self.rebalancer = Rebalancer(self.universe, self.capital, self.size, self.loader, self.screener, self.allocator)
+
+		# Getting the quantities of stocks to initialise the portfolio
+        allocated = self.rebalancer.RebalanceInit()
         
 		# Looping over the chosen stocks and adding them to the portfolio
         for index in range(len(allocated)):
@@ -133,44 +139,78 @@ class Portfolio():
             
 			# Informing the user
             print("This position is not present and shorting isn't available")
+    
+	# Method to run the TLH engine
+    def Harvester(self, threshold):
+		
+        # Setting a copy of the assets
+        temp_assets = self.assets.copy()
+        harvests = []
+
+		# Looping over all assets to assess quality of harvest
+        for i in range(len(temp_assets)):
             
-	# Method for rebalancing the portfolio
+			# Extracting the individual asset and information
+            current_asset = self.assets.iloc[i]["Symbol"]
+            current_quantity = self.assets.iloc[i]["Quantity"]
+            current_trades = self.trades.loc[self.trades["Symbol"] == current_asset]
+            
+            # Passing the filler value
+            if current_asset != "filler":
+
+			    # Checking if a harvest is allowed and good
+                status, self.carry = self.engine.Harvest(current_trades, threshold, self.carry, True)
+                print()
+                print(f"Asset: {current_asset}, Harvest: {status}")
+                if status == True:
+					
+				    # Harvesting
+                    self.SellAsset(current_asset, current_quantity)
+                    harvests.append(current_asset)
+                
+        # Getting the quantities to trade for the rebalance
+        allocated = self.rebalancer.RebalanceTLH(harvests, temp_assets)
+        
+		# Looping over the allocated and checking if we need to buy or sell
+        for index in range(len(allocated)):
+            
+			# Checking for a buy
+            if allocated["Quantities"].iloc[index] > 0:
+                
+				# Buying the given quantity of given asset
+                self.BuyAsset(allocated["Symbols"].iloc[index], allocated["Quantities"].iloc[index])
+                
+			# Checking for a sell
+            elif allocated["Quantities"].iloc[index] < 0:
+                
+				# Selling the given quantity of given asset
+                self.SellAsset(allocated["Symbols"].iloc[index], allocated["Quantities"].iloc[index])
+                
+			# Otherwise the quantity is 0
+            else:
+                pass
+            
+	# Method to rebalance the portfolio
     def Rebalance(self):
         
-		# Defining a rebalancer
-        rebalancer = Rebalance()
+		# Getting the quantities to trade for the rebalance
+        allocated = self.rebalancer.RebalanceReg(self.assets)
         
-		# Running the TLH engine of the rebalancer
-        harvest = rebalancer.Engine(self.trades, self.assets)
-        
-		# Objects for choosing the top stocks of our universe
-        loader = DataLoader()
-        screener = Screener()
-        allocator = Allocator()
-        
-        print()
-        print(self.universe)
-        print(self.available_universe)
-
-        # Only harvest if there's stuff to harvest
-        if harvest != None:
+		# Looping over the allocated and checking if we need to buy or sell
+        for index in range(len(allocated)):
             
-		    # Harvesting
-            for i in range(len(harvest)):
-            
-			    # Extracting the quantity
-                quantity = self.assets[self.assets["Symbol"]==harvest.iloc[i]]["Quantity"].item()
-            
-			    # Harvesting the position
-                self.SellAsset(harvest.iloc[i], quantity)
-            
-        print()
-        print(self.universe)
-        print(self.available_universe)
-        print()
-        
-		# Calculating quantities for what stocks
-        stocks = loader.Past(self.universe)
-        screened = screener.Screen(stocks, self.size)
-        allocated = allocator.Allocate(screened, self.capital, loader)
-        print(allocated)
+			# Checking for a buy
+            if allocated["Quantities"].iloc[index] > 0:
+                
+				# Buying the given quantity of given asset
+                self.BuyAsset(allocated["Symbols"].iloc[index], allocated["Quantities"].iloc[index])
+                
+			# Checking for a sell
+            elif allocated["Quantities"].iloc[index] < 0:
+                
+				# Selling the given quantity of given asset
+                self.SellAsset(allocated["Symbols"].iloc[index], allocated["Quantities"].iloc[index])
+                
+			# Otherwise the quantity is 0
+            else:
+                pass
