@@ -11,44 +11,65 @@ from __TaxLossHarvester__ import TaxLossHarvester
 from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
+import pickle
 
 # Portfolio class
 class Portfolio():
     
 	# Initialiser, adds stocks
-    def __init__(self, universe, capital, size):
+    def __init__(self, universe, capital, size, file=None):
         
-		# Setting portfolio attributes
-        self.carry = 0
-        self.size = size
-        self.capital = capital
-        self.starting_capital = capital
-        self.universe = universe.copy()
-        self.available_universe = universe.copy()
-        
-		# Setting manager dataframes for tracking trades and assets
-        self.trades = pd.DataFrame({"Date":["filler"], "Symbol":["filler"], "Price":["filler"], "Quantity":["filler"], "Action":["filler"]})
-        self.assets = pd.DataFrame({"Symbol":["filler"], "Quantity":["filler"]})
+        # If no file is provided, run regular initialisation protocol
+        if file == None:
 
-		# Setting the tools of the portfolio
-        self.taxer = Taxer()
-        self.checker = Checker()
-        self.calculator = Calculator()
-        self.loader = DataLoader()
-        self.screener = Screener()
-        self.allocator = Allocator()
-        self.manager = OrderManager(self.loader)
-        self.engine = TaxLossHarvester(self.checker, self.calculator, self.taxer, self.loader)
-        self.rebalancer = Rebalancer(self.universe, self.capital, self.size, self.loader, self.screener, self.allocator)
-
-		# Getting the quantities of stocks to initialise the portfolio
-        allocated = self.rebalancer.RebalanceInit()
+		    # Setting portfolio attributes
+            self.carry = 0
+            self.size = size
+            self.capital = capital
+            self.starting_capital = capital
+            self.universe = universe.copy()
+            self.available_universe = universe.copy()
         
-		# Looping over the chosen stocks and adding them to the portfolio
-        for index in range(len(allocated)):
+		    # Setting manager dataframes for tracking trades and assets
+            self.trades = pd.DataFrame({"Date":["filler"], "Symbol":["filler"], "Price":["filler"], "Quantity":["filler"], "Action":["filler"]})
+            self.assets = pd.DataFrame({"Symbol":["filler"], "Quantity":["filler"]})
+
+		    # Setting the tools of the portfolio
+            self.taxer = Taxer()
+            self.checker = Checker()
+            self.calculator = Calculator()
+            self.loader = DataLoader()
+            self.screener = Screener()
+            self.allocator = Allocator()
+            self.manager = OrderManager(self.loader)
+            self.engine = TaxLossHarvester(self.checker, self.calculator, self.taxer, self.loader)
+            self.rebalancer = Rebalancer(self.universe, self.capital, self.size, self.loader, self.screener, self.allocator)
+
+		    # Getting the quantities of stocks to initialise the portfolio
+            allocated = self.rebalancer.RebalanceInit()
+        
+		    # Looping over the chosen stocks and adding them to the portfolio
+            for index in range(len(allocated)):
             
-			# Adding the asset
-            self.BuyAsset(allocated["Symbols"].iloc[index], allocated["Quantities"].iloc[index])
+			    # Adding the asset
+                self.BuyAsset(allocated["Symbols"].iloc[index], allocated["Quantities"].iloc[index])
+                
+		# Otherwise attempt to load provided file data
+        else:
+            
+			# Retrieving function
+            self.LoadPortfolio(file)
+            
+			# Setting the tools of the portfolio
+            self.taxer = Taxer()
+            self.checker = Checker()
+            self.calculator = Calculator()
+            self.loader = DataLoader()
+            self.screener = Screener()
+            self.allocator = Allocator()
+            self.manager = OrderManager(self.loader)
+            self.engine = TaxLossHarvester(self.checker, self.calculator, self.taxer, self.loader)
+            self.rebalancer = Rebalancer(self.universe, self.capital, self.size, self.loader, self.screener, self.allocator)
         
 	# Method to buy an asset for the portfolio
     def BuyAsset(self, symbol, quantity):
@@ -86,7 +107,7 @@ class Portfolio():
             self.trades = pd.concat([self.trades, order]).reset_index(drop=True)
 
 		# Updating the capital
-        self.capital -= (order["Quantity"] * order["Price"])
+        self.capital -= float((order["Quantity"] * order["Price"]).iloc[0])
     
 	# Method to sell an asset for the portfolio
     def SellAsset(self, symbol, quantity):
@@ -132,7 +153,7 @@ class Portfolio():
                 self.trades = pd.concat([self.trades, order]).reset_index(drop=True)
                 
 				# Updating the capital
-                self.capital += (order["Quantity"] * order["Price"])
+                self.capital += float((order["Quantity"] * order["Price"]).iloc[0])
             
 		# Otherwise the position isn't present and shorting isn't allowed so...
         else:
@@ -184,7 +205,7 @@ class Portfolio():
             elif allocated["Quantities"].iloc[index] < 0:
                 
 				# Selling the given quantity of given asset
-                self.SellAsset(allocated["Symbols"].iloc[index], allocated["Quantities"].iloc[index])
+                self.SellAsset(allocated["Symbols"].iloc[index], abs(allocated["Quantities"].iloc[index]))
                 
 			# Otherwise the quantity is 0
             else:
@@ -209,8 +230,49 @@ class Portfolio():
             elif allocated["Quantities"].iloc[index] < 0:
                 
 				# Selling the given quantity of given asset
-                self.SellAsset(allocated["Symbols"].iloc[index], allocated["Quantities"].iloc[index])
+                self.SellAsset(allocated["Symbols"].iloc[index], abs(allocated["Quantities"].iloc[index]))
                 
 			# Otherwise the quantity is 0
             else:
                 pass
+            
+	# Method to save current portfolio data
+    def SavePortfolio(self, filename):
+        
+        # Extracting the attributes
+        data = {"carry":self.carry,
+                "size":self.size,
+                "capital":self.capital,
+                "starting_capital":self.starting_capital,
+                "universe":self.universe,
+                "available_universe":self.available_universe,
+                "trades":self.trades,
+                "assets":self.assets}
+
+		# Context manager
+        with open(filename, "wb") as f:
+            pickle.dump(data, f)
+            
+	# Method for loading previous portfolio data
+    def LoadPortfolio(self, filename):
+        
+		# Attempting to retrieve data
+        try:
+            
+			# Context manager
+            with open(filename, "rb") as f:
+                
+				# Loading the data and pasting it to the portfolio
+                data = pickle.load(f)
+                self.carry = data["carry"]
+                self.size = data["size"]
+                self.capital = data["capital"]
+                self.starting_capital = data["starting_capital"]
+                self.universe = data["universe"]
+                self.available_universe = data["available_universe"]
+                self.trades = data["trades"]
+                self.assets = data["assets"]
+        
+		# Handling a file not found error
+        except FileNotFoundError:
+            print("Save file not found.")

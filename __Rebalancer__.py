@@ -20,7 +20,7 @@ class Rebalancer():
     
 	# Method for initialising the portfolio's stocks
     def RebalanceInit(self):
-        
+
 		# Calculating the quantities for given stocks
         stocks = self.loader.Past(self.universe)
         screened = self.screener.Screen(stocks, self.size)
@@ -36,8 +36,8 @@ class Rebalancer():
         
 		# Setting the available universe to everything bar the harvested
         available = [asset for asset in self.universe if asset not in harvested]
-        
-		# Calculating the quantities for available
+       
+	    # Calculating the quantities for available
         stocks = self.loader.Past(available)
         screened = self.screener.Screen(stocks, self.size)
         allocated = self.allocator.Allocate(screened, self.capital, self.loader)
