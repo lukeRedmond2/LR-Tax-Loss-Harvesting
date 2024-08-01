@@ -35,8 +35,8 @@ class Taxer():
         if print_info == True:
             
 		    # Informing user of the tax due before a harvest
-            print(f"LT before: {long_term_tax_before}")
-            print(f"ST before: {short_term_tax_before}")
+            print(f"LT before:           {round(long_term_tax_before, 2)}")
+            print(f"ST before:           {round(short_term_tax_before, 2)}")
         
 		# Handling long term unrealized losses
         if long_term_unrealised < 0 and long_term_realised > 0:
@@ -265,17 +265,17 @@ class Taxer():
         if print_info == True:
             
 		    # Printing final after taxes and any carry forward losses
-            print(f"LT after:            {long_term_tax_after}")
-            print(f"ST after:            {short_term_tax_after}")
-            print(f"LT saved:            {long_term_savings}")
-            print(f"ST saved:            {short_term_savings}")
-            print(f"Total savings:       {total_tax_savings}")
-            print(f"Total savings:       %{total_tax_percentage_savings}")
-            print(f"Gross gains before:  {total_gains_before}")
-            print(f"Gross gains after:   {total_gains_after}")
-            print(f"Net gains before:    {net_gains_before}")
-            print(f"Net gains after:     {net_gains_after}")
+            print(f"LT after:            {round(long_term_tax_after, 2)}")
+            print(f"ST after:            {round(short_term_tax_after, 2)}")
+            print(f"LT saved:            {round(long_term_savings, 2)}")
+            print(f"ST saved:            {round(short_term_savings, 2)}")
+            print(f"Total savings:       {round(total_tax_savings, 2)}")
+            print(f"Total savings:       %{round(total_tax_percentage_savings, 2)}")
+            print(f"Gross gains before:  {round(total_gains_before, 2)}")
+            print(f"Gross gains after:   {round(total_gains_after, 2)}")
+            print(f"Net gains before:    {round(net_gains_before, 2)}")
+            print(f"Net gains after:     {round(net_gains_after, 2)}")
             print(f"Carry forward:       {min(finalcarry, 0)}")
             
 		# Returning the saving percentage, list of taxes and carry forward losses
-        return total_tax_percentage_savings, [long_term_tax_before, short_term_tax_before, long_term_tax_after, short_term_tax_after], min(finalcarry, 0)
+        return total_tax_percentage_savings, [long_term_tax_before, short_term_tax_before, long_term_tax_after, short_term_tax_after],  min(finalcarry, 0)

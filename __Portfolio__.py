@@ -69,7 +69,7 @@ class Portfolio():
             self.allocator = Allocator()
             self.manager = OrderManager(self.loader)
             self.engine = TaxLossHarvester(self.checker, self.calculator, self.taxer, self.loader)
-            self.rebalancer = Rebalancer(self.universe, self.capital, self.size, self.loader, self.screener, self.allocator)
+            self.rebalancer = Rebalancer(self.universe, self.starting_capital, self.size, self.loader, self.screener, self.allocator)
         
 	# Method to buy an asset for the portfolio
     def BuyAsset(self, symbol, quantity):
@@ -83,6 +83,7 @@ class Portfolio():
 			# Checking if a new stock breaches the portfolio size
             if (len(self.assets)-1) >= self.size:
                 print("Portfolio size limit reached. Cannot add new asset")
+                print(f"Symbol: {order['Symbol'][0]}, Quantity: {order['Quantity'][0]}")
                 return
             
 			# Adding the asset to the portfolio asset list
@@ -127,6 +128,7 @@ class Portfolio():
                 
 				# Inform the user and exit
                 print("Quantity too great, no short sales allowed")
+                print(f"Symbol: {order['Symbol'][0]}, Quantity: {order['Quantity'][0]}")
             
 			# If the sale cancels out position completely then remove it from assets
             elif new_quantity == 0:
@@ -160,37 +162,44 @@ class Portfolio():
             
 			# Informing the user
             print("This position is not present and shorting isn't available")
+            print(f"Symbol: {order['Symbol'][0]}, Quantity: {order['Quantity'][0]}")
     
 	# Method to run the TLH engine
-    def Harvester(self, threshold):
+    def Harvester(self, threshold, taxinfo):
 		
         # Setting a copy of the assets
         temp_assets = self.assets.copy()
         harvests = []
-
+        
 		# Looping over all assets to assess quality of harvest
         for i in range(len(temp_assets)):
             
 			# Extracting the individual asset and information
-            current_asset = self.assets.iloc[i]["Symbol"]
-            current_quantity = self.assets.iloc[i]["Quantity"]
+            current_asset = temp_assets.iloc[i]["Symbol"]
+            current_quantity = temp_assets.iloc[i]["Quantity"]
             current_trades = self.trades.loc[self.trades["Symbol"] == current_asset]
             
             # Passing the filler value
             if current_asset != "filler":
 
 			    # Checking if a harvest is allowed and good
-                status, self.carry = self.engine.Harvest(current_trades, threshold, self.carry, True)
+                status, self.carry, savings, taxes = self.engine.Harvest(current_trades, threshold, self.carry, taxinfo)
+                print(f"Asset:                {current_asset:<16} Harvest:               {status}")
+                print(f"Savings:              %{savings:<15} Carry forward losses:  ${self.carry:<15.2f}")
+                print(f"Long term tax before: ${taxes[0]:<15.2f} Short term tax before: ${taxes[1]:<15.2f}")
+                print(f"Long term tax after:  ${taxes[2]:<15.2f} Short term tax after:  ${taxes[3]:<15.2f}")
                 print()
-                print(f"Asset: {current_asset}, Harvest: {status}")
                 if status == True:
 					
 				    # Harvesting
                     self.SellAsset(current_asset, current_quantity)
                     harvests.append(current_asset)
-                
+
         # Getting the quantities to trade for the rebalance
         allocated = self.rebalancer.RebalanceTLH(harvests, temp_assets)
+        
+		# Sorting allocations by quant ascending to avoid full portfolio issue
+        allocated = allocated.sort_values(by="Quantities").reset_index(drop=True)
         
 		# Looping over the allocated and checking if we need to buy or sell
         for index in range(len(allocated)):
@@ -203,7 +212,7 @@ class Portfolio():
                 
 			# Checking for a sell
             elif allocated["Quantities"].iloc[index] < 0:
-                
+               
 				# Selling the given quantity of given asset
                 self.SellAsset(allocated["Symbols"].iloc[index], abs(allocated["Quantities"].iloc[index]))
                 
@@ -217,6 +226,9 @@ class Portfolio():
 		# Getting the quantities to trade for the rebalance
         allocated = self.rebalancer.RebalanceReg(self.assets)
         
+		# Sorting allocations by quant ascending to avoid full portfolio issue
+        allocated = allocated.sort_values(by="Quantities").reset_index(drop=True)
+
 		# Looping over the allocated and checking if we need to buy or sell
         for index in range(len(allocated)):
             
@@ -236,6 +248,46 @@ class Portfolio():
             else:
                 pass
             
+    # Method to calculate gains
+    def CurrentGains(self):
+        
+        # Storage of gains
+        total_realised = 0
+        total_unrealised = 0
+        
+		# Isolating every asset to ever be traded on the portfolio
+        assets_w_dups = []
+        
+		# Looping over the trades
+        for i in range(len(self.trades)):
+            
+            # Passing the filler value
+            if self.trades.iloc[i]["Symbol"] != "filler":
+                
+                # Updating the list
+                assets_w_dups.append(self.trades.iloc[i]["Symbol"])
+                
+		    # Passing otherwise
+            else:
+                pass
+            
+		# Removing duplicates by creating a set
+        assets = set(assets_w_dups)
+        assets = list(assets) 
+
+		# Looping over the every asset ever
+        for i in range(len(assets)):
+                
+			# Calculating the individual gains and updating the totals
+            gains = self.calculator.Calculate(self.trades.loc[self.trades["Symbol"]==assets[i]], self.loader.Live(assets[i], "price"))
+            total_realised += (gains[0] + gains[1])
+            total_unrealised += (gains[2] + gains[3])
+
+		# Informing the user and returning the gains
+        print(f"Total Realised Gains:   {round(total_realised, 2)}")
+        print(f"Total Unrealised Gains: {round(total_unrealised, 2)}")
+        return total_realised, total_unrealised
+
 	# Method to save current portfolio data
     def SavePortfolio(self, filename):
         

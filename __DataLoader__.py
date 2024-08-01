@@ -26,7 +26,7 @@ class DataLoader():
             htmlcode = bs(request.text, "html.parser")
             
 			# Finding and returning the price
-            return float(htmlcode.find("fin-streamer", {"class": "livePrice svelte-mgkamr"}).text.replace(",", ''))
+            return float(htmlcode.find("fin-streamer", {"class": "livePrice yf-mgkamr"}).text.replace(",", ''))
 
 		# Checking if market capitalisation is chosen
         elif choice == "mcap":

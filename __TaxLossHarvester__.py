@@ -36,16 +36,16 @@ class TaxLossHarvester():
             if savings >= threshold:
                 
 				# It's good for harvesting
-                return True, carry
+                return True, carry, savings, taxes
 
 			# Otherwise no harvest
             else:
 
                 # Not good for harvesting
-                return False, carry
+                return False, carry, savings, taxes
             
 		# Otherwise no harvest
         else:
             
 			# Not good for harvesting
-            return False, carry
+            return False, carry, 0, (0,0,0,0)

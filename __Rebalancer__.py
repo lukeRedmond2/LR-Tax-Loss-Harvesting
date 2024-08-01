@@ -26,7 +26,9 @@ class Rebalancer():
         screened = self.screener.Screen(stocks, self.size)
         allocated = self.allocator.Allocate(screened, self.capital, self.loader)
         specifics = allocated[["Symbols", "Quantities"]].copy()
+        print("Goal quantities:")
         print(allocated)
+        print()
         
 		# Returning the allocated dataframe which contains quantities
         return specifics
@@ -36,34 +38,34 @@ class Rebalancer():
         
 		# Setting the available universe to everything bar the harvested
         available = [asset for asset in self.universe if asset not in harvested]
-       
+        available_assets = assets.loc[[True if asset not in harvested else False for asset in assets["Symbol"].values]]
+		
 	    # Calculating the quantities for available
         stocks = self.loader.Past(available)
         screened = self.screener.Screen(stocks, self.size)
         allocated = self.allocator.Allocate(screened, self.capital, self.loader)
         specifics = allocated[["Symbols", "Quantities"]].copy()
+        print("Goal quantities:")
         print(allocated)
-        
-	    # Finding the stocks in assets that aren't in allocated
-        for i in range(len(assets)):
+        print()
+
+        # Finding the stocks in assets that aren't in allocated
+        for i in range(len(available_assets)):
+
+			# Extracting the specifics of assets
+            symbol = available_assets.iloc[i]["Symbol"]
+            quantity = available_assets.iloc[i]["Quantity"]
             
-            # Passing the filler value
-            if assets.iloc[i]["Symbol"] != "filler":
-
-		 	    # Extracting the specifics of assets
-                symbol = assets.iloc[i]["Symbol"]
-                quantity = assets.iloc[i]["Quantity"]
-
-		  	    # Checking if it's not in allocated
-                if symbol not in specifics["Symbols"].values:
+		 	# Checking if it's not in allocated
+            if symbol not in specifics["Symbols"].values:
                 
-		  	    	# Updating the lists
-                    specifics.loc[len(specifics)+1] = [symbol, -quantity]
+		 	    # Updating the lists
+                specifics.loc[len(specifics)+1] = [symbol, -quantity]
                     
 			# Otherwise pass
             else:
                 pass
-        
+
 		# Looping over the allocated
         for i in range(len(allocated)):
             
@@ -79,6 +81,9 @@ class Rebalancer():
                 specifics.loc[specifics["Symbols"]==symbol, "Quantities"] = difference.iloc[0]
         
         # Returning the allocated dataframe which contains quantities
+        print("Necessary quantities:")
+        print(specifics)
+        print()
         return specifics
     
 	# Method for a regular rebalance
@@ -89,7 +94,9 @@ class Rebalancer():
         screened = self.screener.Screen(stocks, self.size)
         allocated = self.allocator.Allocate(screened, self.capital, self.loader)
         specifics = allocated[["Symbols", "Quantities"]].copy()
+        print("Goal quantities:")
         print(allocated)
+        print()
             
 		# Finding the stocks in assets that aren't in allocated
         for i in range(len(assets)):
@@ -126,4 +133,7 @@ class Rebalancer():
                 specifics.loc[specifics["Symbols"]==symbol, "Quantities"] = difference.iloc[0]
                 
         # Returning the quantities to be traded
+        print("Necessary quantities:")
+        print(specifics)
+        print()
         return specifics
